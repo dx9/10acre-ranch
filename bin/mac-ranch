@@ -27,6 +27,7 @@ Additional create options:
   -R - REPOS to use for master build (implies -s rancher/server:master)
   -s - Server Container image (default: rancher/server:latest)
   -u - Registry mirror URL (default: none)
+  -U - Docker version from https://github.com/rancher/install-docker i.e 17.12 (default: none)
 EOF
 }
 
@@ -120,13 +121,18 @@ build_master()
       image="${MASTER_IMAGE}"
   fi
 
+  install_docker_version=""
+  if [[ "${INSTALL_DOCKER_URL}" ]]; then
+    install_docker_version="--engine-install-url=${INSTALL_DOCKER_URL}"
+  fi
+
   docker-machine create \
     --driver=xhyve \
     --xhyve-boot2docker-url="${BOOT2DOCKER}" \
     --xhyve-memory-size="${SERVER_MACHINE_SIZE}" \
     --xhyve-cpu-count="${SERVER_MACHINE_CPUS}" \
     --xhyve-boot-cmd="${BOOT_ARGS} host=${name}" \
-    ${mirror} ${CLUSTER_NAME}
+    ${mirror} ${install_docker_version} ${CLUSTER_NAME}
 
   docker-machine ssh ${CLUSTER_NAME} docker run -d \
     --restart=unless-stopped \
@@ -152,6 +158,11 @@ build_hosts()
     mirror="--engine-registry-mirror=${MIRROR_URL}"
   fi
 
+  install_docker_version=""
+  if [[ "${INSTALL_DOCKER_URL}" ]]; then
+    install_docker_version="--engine-install-url=${INSTALL_DOCKER_URL}"
+  fi
+
   if [ "${HOST_COUNT}" -gt "0" ]; then
     offset=$(list_host_names|wc -l)
     first_offset=$offset
@@ -165,7 +176,7 @@ build_hosts()
         --driver=xhyve \
         --xhyve-boot2docker-url="${BOOT2DOCKER}" \
         --xhyve-memory-size="${HOST_MACHINE_SIZE}" \
-        --xhyve-boot-cmd="${BOOT_ARGS} host=${name}" ${mirror} ${name} 1>&2;
+        --xhyve-boot-cmd="${BOOT_ARGS} host=${name}" ${mirror} ${install_docker_version} ${name} 1>&2;
     done
   fi
 
@@ -290,8 +301,9 @@ HOST_COUNT=2
 HOST_MACHINE_SIZE="1024"
 MIRROR_URL=""
 PULL_IMAGES=("hello-world" "nginx" "busybox" "ubuntu" "rancher/curl" "cloudnautique/hello-world")
+INSTALL_DOCKER_URL=""
 
-while getopts ":b:cdhilM:m:n:pPr:R:s:u:" opt;do
+while getopts ":b:cdhilM:m:n:pPr:R:s:u:U:" opt;do
   case $opt in
   b)
     if [[ "$OPTARG" == http* ]]; then
@@ -344,6 +356,9 @@ while getopts ":b:cdhilM:m:n:pPr:R:s:u:" opt;do
     ;;
   u)
     MIRROR_URL="${OPTARG}"
+    ;;
+  U)
+    INSTALL_DOCKER_URL="https://releases.rancher.com/install-docker/${OPTARG}.sh"
     ;;
   \?)
     echoerr "Invalid arguemnts"
